@@ -22,7 +22,8 @@
   </div>
 {% endmacro %}
 
-<form method="post" class="card" novalidate>
+<form method="post" class="card" novalidate
+      onsubmit="const b = this.querySelector('button[type=submit]'); b.disabled = true; b.textContent = 'Saving…';">
   <fieldset>
     <legend>Patient</legend>
     {{ field("full_name", "Full name") }}

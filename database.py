@@ -23,6 +23,16 @@ CREATE TABLE IF NOT EXISTS patients (
 )
 """
 
+# Same name (any case), date of birth and email means the same person. Enforced by the database
+# itself so two quick submits can't both slip past find_duplicate() while the AI call runs.
+# Email is already lower-cased by validation.
+UNIQUE_PERSON = """
+CREATE UNIQUE INDEX IF NOT EXISTS patients_unique_person
+ON patients (lower(full_name), dob, email)
+"""
+
+DuplicatePatient = sqlite3.IntegrityError
+
 
 @contextmanager
 def connect(db_path: Path | None = None) -> Iterator[sqlite3.Connection]:
@@ -38,6 +48,11 @@ def connect(db_path: Path | None = None) -> Iterator[sqlite3.Connection]:
 def init_db(db_path: Path | None = None) -> None:
     with connect(db_path) as conn:
         conn.execute(SCHEMA)
+        # Remove copies saved before the unique index existed, keeping the earliest record.
+        conn.execute("""DELETE FROM patients WHERE id NOT IN (
+                            SELECT MIN(id) FROM patients GROUP BY lower(full_name), dob, email)""")
+        conn.execute(UNIQUE_PERSON)
+        renumber(conn)  # also repairs gaps left by deletes made before renumbering existed
         conn.commit()
 
 
@@ -82,4 +97,20 @@ def update_patient(conn: sqlite3.Connection, patient_id: int, data: dict) -> Non
 
 def delete_patient(conn: sqlite3.Connection, patient_id: int) -> None:
     conn.execute("DELETE FROM patients WHERE id = ?", (patient_id,))
+    renumber(conn)
     conn.commit()
+
+
+def renumber(conn: sqlite3.Connection) -> None:
+    """Keep record numbers 1..N with no gaps, so the next new record is always N + 1.
+
+    AUTOINCREMENT never reuses a number on its own: delete #4 and the next insert would be #5.
+    """
+    # Walk in ascending order: slots 1..new_id-1 are already filled and every unmoved id is
+    # larger, so the target slot is always free.
+    old_ids = [row["id"] for row in conn.execute("SELECT id FROM patients ORDER BY id")]
+    for new_id, old_id in enumerate(old_ids, start=1):
+        if new_id != old_id:
+            conn.execute("UPDATE patients SET id = ? WHERE id = ?", (new_id, old_id))
+    conn.execute("UPDATE sqlite_sequence SET seq = (SELECT COALESCE(MAX(id), 0) FROM patients) "
+                 "WHERE name = 'patients'")

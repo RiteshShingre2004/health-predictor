@@ -67,7 +67,13 @@ def create():
             return render_template("form.html", form=request.form, errors=errors, patient=None), 422
 
         data.update(run_prediction(data))
-        new_id = db.create_patient(conn, data)
+        try:
+            new_id = db.create_patient(conn, data)
+        except db.DuplicatePatient:  # an identical submit was saved while the AI call ran
+            existing = db.find_duplicate(conn, data)
+            errors["duplicate"] = (f"This patient already exists as record #{existing['id']} "
+                                   "(same name, date of birth and email).")
+            return render_template("form.html", form=request.form, errors=errors, patient=None), 422
     flash(f"Record #{new_id} for {data['full_name']} saved. AI risk: {data['risk_level']}.", "success")
     return redirect(url_for("index"))
 
@@ -90,7 +96,12 @@ def edit(patient_id: int):
             data.update(run_prediction(data))
         else:
             data.update(risk_level=patient["risk_level"], remarks=patient["remarks"])
-        db.update_patient(conn, patient_id, data)
+        try:
+            db.update_patient(conn, patient_id, data)
+        except db.DuplicatePatient:
+            existing = db.find_duplicate(conn, data, exclude_id=patient_id)
+            errors["duplicate"] = f"These details match record #{existing['id']}."
+            return render_template("form.html", form=request.form, errors=errors, patient=patient), 422
     flash(f"Record #{patient_id} updated.", "success")
     return redirect(url_for("index"))
 

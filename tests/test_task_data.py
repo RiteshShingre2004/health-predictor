@@ -87,3 +87,44 @@ def test_edit_email_keeps_remarks_and_delete_removes(client):
 ])
 def test_reference_ranges(glucose, hb, chol, expected):
     assert ai_service.assess_ranges(glucose, hb, chol) == expected
+
+
+def test_delete_renumbers_and_next_record_fills_the_gap(client):
+    for row in (TASK_DATA[0], TASK_DATA[2], TASK_DATA[4], TASK_DATA[6]):
+        submit(client, row)
+    client.post("/patients/2/delete")  # Darryl Tim
+    client.post("/patients/3/delete")  # Madison XI (was #4, now #3)
+    with db.connect() as conn:
+        assert [(p["id"], p["full_name"]) for p in db.list_patients(conn)] == [
+            (1, "Robyn Pears"), (2, "Sam Kerr")]
+    submit(client, TASK_DATA[8])
+    with db.connect() as conn:
+        assert db.list_patients(conn)[-1]["id"] == 3
+
+    for _ in range(3):
+        client.post("/patients/1/delete")
+    submit(client, TASK_DATA[9])
+    with db.connect() as conn:
+        assert [p["id"] for p in db.list_patients(conn)] == [1]  # empty table starts again at 1
+
+
+def test_double_submit_saves_only_one_copy(client, monkeypatch):
+    """Two identical submits that both pass the duplicate check while the AI call runs."""
+    import threading
+    import time
+
+    def slow_predict(age, g, h, c):
+        time.sleep(0.5)
+        return {"risk_level": "Low", "remarks": "stub"}
+
+    monkeypatch.setattr(health_app, "predict", slow_predict)
+    codes = []
+    threads = [threading.Thread(target=lambda: codes.append(submit(health_app.app.test_client(), TASK_DATA[0]).status_code))
+               for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sorted(codes) == [302, 422]
+    with db.connect() as conn:
+        assert len(db.list_patients(conn)) == 1
