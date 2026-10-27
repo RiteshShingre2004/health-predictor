@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <h1>Patient records</h1>
+  <span class="muted">{{ patients|length }} record{{ "" if patients|length == 1 else "s" }}</span>
+</div>
+
+{% if patients %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>Full name</th><th>Date of birth</th><th>Email</th>
+        <th class="num">Glucose<br><small>mg/dL</small></th>
+        <th class="num">Haemoglobin<br><small>g/dL</small></th>
+        <th class="num">Cholesterol<br><small>mg/dL</small></th>
+        <th>Risk</th><th>Remarks (AI)</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in patients %}
+      <tr>
+        <td class="muted">{{ p.id }}</td>
+        <td class="name">{{ p.full_name }}</td>
+        <td class="nowrap">{{ p.dob }}</td>
+        <td>{{ p.email }}</td>
+        <td class="num">{{ p.glucose|num }}</td>
+        <td class="num">{{ p.haemoglobin|num }}</td>
+        <td class="num">{{ p.cholesterol|num }}</td>
+        <td><span class="risk risk-{{ (p.risk_level or 'none')|lower }}">{{ p.risk_level or "—" }}</span></td>
+        <td class="remarks">{{ p.remarks }}</td>
+        <td class="actions">
+          <a href="{{ url_for('edit', patient_id=p.id) }}">Edit</a>
+          <form method="post" action="{{ url_for('delete', patient_id=p.id) }}"
+                onsubmit="return confirm('Delete record #{{ p.id }} ({{ p.full_name }})? This cannot be undone.');">
+            <button type="submit" class="link danger">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty">
+  <p>No patient records yet.</p>
+  <a class="button" href="{{ url_for('create') }}">Add the first record</a>
+</div>
+{% endif %}
+{% endblock %}

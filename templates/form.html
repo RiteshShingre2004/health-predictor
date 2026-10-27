@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit record #%d"|format(patient.id) if patient else "New record" }} · Health Predictor{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ "Edit record #%d"|format(patient.id) if patient else "New patient record" }}</h1>
+  <a href="{{ url_for('index') }}">← Back to records</a>
+</div>
+
+{% if errors %}
+<div class="alert alert-error">
+  <strong>The record was not saved. Please fix {{ errors|length }} problem{{ "" if errors|length == 1 else "s" }}:</strong>
+  <ul>{% for message in errors.values() %}<li>{{ message }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+{% macro field(name, label, hint="", type="text") %}
+  <div class="field {{ 'has-error' if errors.get(name) }}">
+    <label for="{{ name }}">{{ label }}</label>
+    <input id="{{ name }}" name="{{ name }}" type="{{ type }}" value="{{ form.get(name, '')|num }}"
+           {% if hint %}placeholder="{{ hint }}"{% endif %} autocomplete="off">
+    {% if errors.get(name) %}<p class="error">{{ errors[name] }}</p>{% endif %}
+  </div>
+{% endmacro %}
+
+<form method="post" class="card" novalidate>
+  <fieldset>
+    <legend>Patient</legend>
+    {{ field("full_name", "Full name") }}
+    <div class="row">
+      {{ field("dob", "Date of birth", "dd/mm/yyyy") }}
+      {{ field("email", "Email address", "name@example.com") }}
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>Blood test results</legend>
+    <div class="row three">
+      {{ field("glucose", "Glucose (mg/dL)", "e.g. 95") }}
+      {{ field("haemoglobin", "Haemoglobin (g/dL)", "e.g. 14.2") }}
+      {{ field("cholesterol", "Cholesterol (mg/dL)", "e.g. 180") }}
+    </div>
+  </fieldset>
+  {% if patient and patient.remarks %}
+  <p class="current-remarks"><strong>Current AI remarks:</strong> {{ patient.remarks }}<br>
+    <small class="muted">These are regenerated only if the date of birth or a blood value changes.</small></p>
+  {% endif %}
+  <div class="form-actions">
+    <button type="submit" class="button">{{ "Save changes" if patient else "Save and predict" }}</button>
+    <a href="{{ url_for('index') }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}
